@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Canadian Stock &amp; ETF Analyzer</title>
+<meta name="description" content="Analyze any Canadian/US ETF ticker and get tax-optimized account recommendations, sample portfolios, and projected performance.">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          navy: '#1A2A44', navydeep: '#121d31', gold: '#F5A623',
+          goldlt: '#ffc35b', redx: '#D32F2F', grayx: '#F8F9FA'
+        },
+        fontFamily: { sans: ['Inter','sans-serif'] }
+      }
+    }
+  }
+</script>
+<style>
+  html{scroll-behavior:smooth}
+  .grad-text{background:linear-gradient(135deg,var(--tw-colors-gold),#ffc35b);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .card{background:#fff;border-radius:18px;box-shadow:0 14px 40px rgba(26,42,68,.10);border:1px solid #eef1f6}
+  .chips input:checked + div{outline:3px solid var(--tw-colors-gold);outline-offset:2px}
+  input[type=range]{accent-color:#F5A623}
+  .reveal{opacity:0;transform:translateY(24px);transition:opacity .7s ease,transform .7s ease}
+  .reveal.in{opacity:1;transform:none}
+  .badge-rrsp{background:rgba(245,166,35,.15);color:#b9760a}
+  .badge-tfsa{background:rgba(26,42,68,.10);color:#1A2A44}
+  .badge-nonreg{background:rgba(211,47,47,.12);color:#a31f1f}
+  .badge-best{background:#F5A623;color:#1A2A44}
+  table{width:100%;border-collapse:collapse}
+  th,td{text-align:left;padding:10px 12px;border-bottom:1px solid #eef1f6;font-size:14px}
+  th{color:#5b6677;font-weight:600}
+  .fade-in{animation:fade .5s ease}
+  @keyframes fade{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+</style>
+</head>
+<body class="font-sans text-[#1f2733] bg-grayx">
+
+<!-- NAV -->
+<nav class="sticky top-0 z-50 bg-navydeep/95 backdrop-blur text-white">
+  <div class="max-w-6xl mx-auto px-5 py-3 flex items-center justify-between">
+    <div class="font-extrabold text-lg flex items-center gap-2"><i class="fa-solid fa-leaf text-gold"></i> Northern<span class="text-gold">Nomad</span> <span class="text-sm font-medium text-gray-300">· Analyzer</span></div>
+    <a href="https://northernnomad.gumroad.com/l/ftefkt" target="_blank" class="btn-gold px-4 py-2 rounded-full bg-gold text-navy font-bold text-sm hover:scale-105 transition">Get the Full Kit — $19.99</a>
+  </div>
+</nav>
+
+<!-- HERO / INPUT -->
+<header class="relative bg-navy text-white overflow-hidden">
+  <div class="absolute inset-0 opacity-30" style="background:radial-gradient(circle at 25% 30%,rgba(245,166,35,.35),transparent 45%),radial-gradient(circle at 80% 70%,rgba(26,42,68,.6),transparent 50%)"></div>
+  <div class="relative max-w-6xl mx-auto px-5 py-16 grid md:grid-cols-2 gap-12 items-center">
+    <div>
+      <span class="text-gold font-bold text-sm tracking-widest uppercase">🇨🇦 For Canadian Investors</span>
+      <h1 class="text-4xl md:text-5xl font-extrabold mt-3 leading-tight">Canadian Stock &amp; <span class="grad-text">ETF Analyzer</span></h1>
+      <p class="mt-4 text-gray-300 text-lg">Plug in any ticker. Get the tax-optimized account, a sample portfolio, and a 30-year projection — all in your browser.</p>
+      <div class="mt-6 flex gap-3 text-sm text-gray-300">
+        <span class="bg-white/10 px-3 py-1 rounded-full"><i class="fa-solid fa-shield-halved text-gold"></i> TFSA · RRSP · Non-Reg</span>
+        <span class="bg-white/10 px-3 py-1 rounded-full"><i class="fa-solid fa-chart-line text-gold"></i> 10-ETF master list</span>
+      </div>
+    </div>
+
+    <div class="card p-6 text-[#1f2733]" id="formCard">
+      <label class="block text-sm font-semibold mb-1">Ticker symbol</label>
+      <div class="flex gap-2">
+        <input id="ticker" type="text" placeholder="e.g. VOO, VFV, HXS, VCN, XAW" class="flex-1 border border-gray-300 rounded-xl px-4 py-3 font-semibold uppercase focus:outline-none focus:ring-2 focus:ring-gold" autocomplete="off">
+        <button id="analyzeBtn" class="bg-gold text-navy font-bold px-5 rounded-xl hover:scale-105 transition"><i class="fa-solid fa-magnifying-glass"></i></button>
+      </div>
+
+      <label class="block text-sm font-semibold mt-5 mb-2">Account type</label>
+      <div class="grid grid-cols-2 gap-2 chips" id="acctChips">
+        <label><input type="radio" name="acct" value="ALL" class="hidden" checked><div class="text-center border rounded-xl py-2 cursor-pointer hover:bg-grayx font-semibold text-sm">All Accounts</div></label>
+        <label><input type="radio" name="acct" value="TFSA" class="hidden"><div class="text-center border rounded-xl py-2 cursor-pointer hover:bg-grayx font-semibold text-sm">TFSA</div></label>
+        <label><input type="radio" name="acct" value="RRSP" class="hidden"><div class="text-center border rounded-xl py-2 cursor-pointer hover:bg-grayx font-semibold text-sm">RRSP</div></label>
+        <label><input type="radio" name="acct" value="NONREG" class="hidden"><div class="text-center border rounded-xl py-2 cursor-pointer hover:bg-grayx font-semibold text-sm">Non-Reg</div></label>
+      </div>
+
+      <label class="block text-sm font-semibold mt-5 mb-1">Investment amount: <span id="amtLbl" class="text-gold">$10,000</span></label>
+      <input id="amount" type="range" min="1000" max="1000000" step="1000" value="10000" class="w-full">
+      <div class="flex justify-between text-xs text-gray-400"><span>$1k</span><span>$1M</span></div>
+
+      <div class="grid grid-cols-2 gap-4 mt-4">
+        <div>
+          <label class="block text-sm font-semibold mb-1">Horizon: <span id="yrLbl" class="text-gold">10y</span></label>
+          <input id="years" type="range" min="1" max="30" step="1" value="10" class="w-full">
+        </div>
+        <div>
+          <label class="block text-sm font-semibold mb-1">Monthly: <span id="moLbl" class="text-gold">$500</span></label>
+          <input id="monthly" type="range" min="0" max="5000" step="50" value="500" class="w-full">
+        </div>
+      </div>
+
+      <button id="analyzeBtn2" class="w-full mt-5 bg-navy text-white font-bold py-3 rounded-xl hover:bg-navydeep transition">Analyze <i class="fa-solid fa-arrow-right"></i></button>
+      <p id="errMsg" class="text-redx text-sm mt-3 hidden"></p>
+    </div>
+  </div>
+</header>
+
+<!-- RESULTS -->
+<main id="results" class="max-w-6xl mx-auto px-5 py-14 hidden">
+  <!-- TICKER HEADER -->
+  <div class="flex items-center gap-4 mb-8 reveal">
+    <div class="w-14 h-14 rounded-2xl bg-navy text-gold flex items-center justify-center text-2xl font-extrabold" id="tkBadge">VOO</div>
+    <div>
+      <h2 class="text-2xl font-extrabold" id="tkName">—</h2>
+      <p class="text-gray-500 text-sm" id="tkMeta">—</p>
+    </div>
+    <span id="tkRating" class="ml-auto px-4 py-2 rounded-full font-bold text-sm badge-best">—</span>
+  </div>
+
+  <div class="grid md:grid-cols-3 gap-6">
+    <!-- TAX SUMMARY -->
+    <section class="card p-6 reveal">
+      <h3 class="font-bold text-lg mb-4 flex items-center gap-2"><i class="fa-solid fa-receipt text-gold"></i> Tax Summary</h3>
+      <table id="taxTable"></table>
+    </section>
+
+    <!-- ACCOUNT RECOMMENDATION -->
+    <section class="card p-6 md:col-span-2 reveal">
+      <h3 class="font-bold text-lg mb-3 flex items-center gap-2"><i class="fa-solid fa-bullseye text-gold"></i> Account Recommendation</h3>
+      <div id="recBox" class="rounded-xl p-5 bg-grayx mb-4"></div>
+      <h4 class="font-semibold text-sm text-gray-500 mb-2">Annual tax-drag by account (on this holding)</h4>
+      <table id="dragTable"></table>
+    </section>
+  </div>
+
+  <!-- PROJECTED PERFORMANCE -->
+  <section class="card p-6 mt-6 reveal">
+    <h3 class="font-bold text-lg mb-1 flex items-center gap-2"><i class="fa-solid fa-chart-line text-gold"></i> Projected Performance</h3>
+    <p class="text-sm text-gray-500 mb-4" id="projNote">—</p>
+    <div class="relative h-[360px]"><canvas id="perfChart"></canvas></div>
+  </section>
+
+  <!-- SAMPLE PORTFOLIO -->
+  <section class="card p-6 mt-6 reveal">
+    <h3 class="font-bold text-lg mb-4 flex items-center gap-2"><i class="fa-solid fa-layer-group text-gold"></i> Sample Portfolio</h3>
+    <p class="text-sm text-gray-600 mb-4" id="portNote">—</p>
+    <div id="portGrid" class="grid sm:grid-cols-2 lg:grid-cols-4 gap-3"></div>
+  </section>
+
+  <!-- FEE ANALYSIS -->
+  <section class="card p-6 mt-6 reveal">
+    <h3 class="font-bold text-lg mb-4 flex items center gap-2"><i class="fa-solid fa-coins text-gold"></i> Fee &amp; Tax-Drag Analysis</h3>
+    <div class="grid sm:grid-cols-3 gap-4" id="feeGrid"></div>
+  </section>
+
+  <div class="mt-8 text-center reveal">
+    <a href="https://northernnomad.gumroad.com/l/ftefkt" target="_blank" class="inline-block bg-gold text-navy font-bold px-8 py-4 rounded-full hover:scale-105 transition">Get the full Advanced Investor Kit — $19.99</a>
+    <p class="text-xs text-gray-400 mt-3">Estimates only · not financial advice · see assumptions below.</p>
+  </div>
+</main>
+
+<!-- FOOTER -->
+<footer class="bg-navydeep text-gray-300 py-10 mt-10">
+  <div class="max-w-6xl mx-auto px-5 grid md:grid-cols-2 gap-8">
+    <div>
+      <div class="font-extrabold text-white text-lg">🇨🇦 Built for Canadians, by a Canadian</div>
+      <p class="text-sm mt-2 text-gray-400">The Canadian Stock &amp; ETF Analyzer applies the asset-location principles from the Advanced Investor Kit: US-listed US equities in RRSP, CAD-listed/swap in TFSA, Canadian equity in Non-Reg.</p>
+    </div>
+    <div class="text-sm text-gray-400">
+      <p class="font-semibold text-white mb-2">Assumptions &amp; caveats</p>
+      <ul class="list-disc pl-5 space-y-1">
+        <li>Projections use illustrative expected returns (US eq ~7%, CDN eq ~6.5%, global ~6.8%, bonds ~3.5%) minus MER.</li>
+        <li>Tax drag = yield × applicable rate (US withholding 15%, CDN div tax credit ~refund, swap 0%). Educational estimates, not advice.</li>
+        <li>Non-resident TFSA 1%/month penalty not modeled here — covered in the full Kit.</li>
+        <li>Consult a cross-border tax professional before acting.</li>
+      </ul>
+    </div>
+  </div>
+</footer>
+
+<script>
+/* ============ DATA ============ */
+const ETF_DATA = {
+  "VOO": { name: "Vanguard S&P 500 (US-listed)", assetClass: "US Large-Cap", mer: 0.03, dividendYield: 1.2, usWithholding: "0% in RRSP, 15% in TFSA/Non-Reg", taxTreatment: "RRSP best", rating: "RRSP BEST", expReturn: 7.0 },
+  "VFV": { name: "Vanguard S&P 500 (CAD-listed)", assetClass: "US Large-Cap", mer: 0.09, dividendYield: 1.2, usWithholding: "~0.17% embedded drag", taxTreatment: "TFSA good, RRSP suboptimal", rating: "TFSA GOOD", expReturn: 7.0 },
+  "HXS": { name: "Horizons S&P 500 (Swap-based)", assetClass: "US Large-Cap (Swap)", mer: 0.10, dividendYield: 0, usWithholding: "0%", taxTreatment: "TFSA/Non-Reg best", rating: "TFSA BEST", expReturn: 7.0 },
+  "VCN": { name: "Vanguard FTSE Canada All Cap", assetClass: "Canadian Equity", mer: 0.05, dividendYield: 2.8, usWithholding: "0%", taxTreatment: "Non-Reg best (div tax credit)", rating: "Non-Reg BEST", expReturn: 6.5 },
+  "XIC": { name: "iShares Core S&P/TSX Capped Composite", assetClass: "Canadian Equity", mer: 0.06, dividendYield: 2.8, usWithholding: "0%", taxTreatment: "Non-Reg best", rating: "Non-Reg BEST", expReturn: 6.5 },
+  "XAW": { name: "iShares MSCI ACWI ex Canada", assetClass: "Global ex-Canada", mer: 0.22, dividendYield: 1.8, usWithholding: "~0.17% embedded", taxTreatment: "TFSA best", rating: "TFSA BEST", expReturn: 6.8 },
+  "ZAG": { name: "BMO Aggregate Bond", assetClass: "Bonds", mer: 0.09, dividendYield: 3.5, usWithholding: "0%", taxTreatment: "TFSA/RRSP best", rating: "TFSA BEST", expReturn: 3.5 },
+  "HXT": { name: "Horizons S&P/TSX 60 (Swap)", assetClass: "Canadian (Swap)", mer: 0.04, dividendYield: 0, usWithholding: "0%", taxTreatment: "Non-Reg best", rating: "Non-Reg BEST", expReturn: 6.5 },
+  "VTI": { name: "Vanguard Total Stock Market (US-listed)", assetClass: "US Total Market", mer: 0.03, dividendYield: 1.3, usWithholding: "0% in RRSP, 15% in TFSA/Non-Reg", taxTreatment: "RRSP best", rating: "RRSP BEST", expReturn: 7.0 },
+  "XEQT": { name: "iShares Core Equity Portfolio", assetClass: "100% Equity", mer: 0.20, dividendYield: 1.8, usWithholding: "~0.10-0.20%", taxTreatment: "TFSA best", rating: "TFSA BEST", expReturn: 6.8 }
+};
+
+/* expected marginal tax rate (illustrative, top Ontario-ish) for income interest/div */
+const MTR = 0.43;
+
+/* optimal account from rating */
+function optimalAccount(etf){
+  const r = etf.rating;
+  if(r.includes("RRSP")) return "RRSP";
+  if(r.includes("Non-Reg")) return "NONREG";
+  return "TFSA"; // TFSA BEST / TFSA GOOD
+}
+
+/* annual tax drag % by account for a holding of given yield (return as decimal fraction of value) */
+function taxDragPct(etf, acct){
+  const y = etf.dividendYield/100;
+  if(acct==="RRSP"){
+    // US-listed US equities: 0 US withholding. Others: still 0 US wh in RRSP only if US-listed; CAD-listed keep embedded.
+    if(etf.assetClass.startsWith("US") && etf.usWithholding.includes("0% in RRSP")) return 0;
+    if(etf.assetClass.includes("Swap")) return 0; // swap: no distributions
+    if(etf.assetClass==="Bonds") return 0; // interest sheltered in RRSP
+    if(etf.assetClass.startsWith("Canadian") || etf.assetClass==="Global ex-Canada" || etf.assetClass==="100% Equity")
+      return y*0; // no annual drag modeled (no withholding); MER separate
+    return y*0.15; // fallback US wh
+  }
+  if(acct==="TFSA"){
+    if(etf.assetClass.includes("Swap")) return 0;
+    if(etf.assetClass.startsWith("US")){
+      // US-listed: 15% withholding on dividends; CAD-listed: ~0.17% embedded
+      if(etf.usWithholding.includes("0% in RRSP")) return y*0.15;
+      return 0.0017; // embedded drag ~0.17%
+    }
+    if(etf.assetClass==="Bonds") return 0; // sheltered
+    if(etf.assetClass.startsWith("Canadian") || etf.assetClass==="Global ex-Canada" || etf.assetClass==="100% Equity") return 0;
+    return 0;
+  }
+  // NONREG
+  if(etf.assetClass.includes("Swap")) return 0; // capital gains only
+  if(etf.assetClass.startsWith("Canadian")){
+    // dividend tax credit ~ offsets most; model small net (eligible div ~ net 10% of gross)
+    return y*0.10;
+  }
+  if(etf.assetClass.startsWith("US")){
+    if(etf.usWithholding.includes("0% in RRSP")) return y*(0.15 + (1-0.15)*MTR); // 15% wh + remaining taxed at MTR
+    return y*MTR + 0.0017;
+  }
+  if(etf.assetClass==="Bonds") return y*MTR; // interest fully taxed
+  if(etf.assetClass==="Global ex-Canada" || etf.assetClass==="100% Equity") return 0.0017 + y*MTR*0.5;
+  return y*MTR;
+}
+
+const ACCT_META = {
+  RRSP:   {label:"RRSP",       cls:"badge-rrsp",  note:"US-listed US equities → 0% withholding"},
+  TFSA:   {label:"TFSA",       cls:"badge-tfsa",  note:"CAD-listed / swap ETFs → no annual drag"},
+  NONREG: {label:"Non-Reg",     cls:"badge-nonreg",note:"Canadian equity → dividend tax credit"}
+};
+
+/* account recommendations explanation */
+function recExplanation(etf, opt){
+  const why = {
+    RRSP:"US-listed US equities escape the 15% US withholding tax inside an RRSP thanks to the Canada–US tax treaty. This is the single biggest account-location win for VOO/VTI holders.",
+    TFSA:"This ETF is either CAD-listed (VOO-proxy VFV) or swap-based (HXS), so it avoids the 15% US withholding entirely and grows tax-free inside a TFSA. Putting it in an RRSP adds nothing and can even add FX friction.",
+    NONREG:"Canadian equity gets the dividend tax credit, which makes Non-Reg the most tax-efficient home. Swap versions (HXT) defer all distributions to a capital gain. Avoid sheltering these in registered accounts where the credit is wasted."
+  };
+  return why[opt];
+}
+
+/* sample portfolio per optimal account */
+const SAMPLE_PORTFOLIOS = {
+  RRSP: [
+    {t:"VOO",d:"US S&P 500 (0% wh)",w:40},
+    {t:"VTI",d:"US Total Market",w:15},
+    {t:"ZAG",d:"Bonds",w:15},
+    {t:"VCN",d:"Canadian Equity",w:30}
+  ],
+  TFSA: [
+    {t:"VFV",d:"S&P 500 (CAD)",w:35},
+    {t:"XAW",d:"Global ex-Canada",w:30},
+    {t:"HXS",d:"S&P 500 Swap",w:15},
+    {t:"ZAG",d:"Bonds",w:20}
+  ],
+  NONREG: [
+    {t:"VCN",d:"Canadian Equity",w:35},
+    {t:"HXT",d:"TSX 60 Swap",w:20},
+    {t:"XAW",d:"Global ex-Canada",w:30},
+    {t:"ZAG",d:"Bonds",w:15}
+  ]
+};
+
+/* ============ HELPERS ============ */
+const fmt$ = n => "$"+Math.round(n).toLocaleString('en-CA');
+const fmtPct = n => (n*100).toFixed(2)+"%";
+
+/* projected value: monthly contributions + lump, monthly compounding */
+function project(principal, monthly, years, annualNetReturnPct){
+  const r = annualNetReturnPct/100/12;
+  const months = years*12;
+  let bal = principal;
+  const series = [bal];
+  for(let m=1;m<=months;m++){
+    bal = bal*(1+r) + monthly;
+    if(m%12===0) series.push(bal);
+  }
+  // ensure last year captured
+  if(series.length < years+1) series.push(bal);
+  return series;
+}
+
+/* ============ RENDER ============ */
+let chartRef=null;
+function analyze(){
+  const raw = document.getElementById('ticker').value.trim().toUpperCase();
+  const err = document.getElementById('errMsg');
+  if(!ETF_DATA[raw]){
+    err.textContent = "Ticker not in the master list. Try: "+Object.keys(ETF_DATA).join(", ");
+    err.classList.remove('hidden');
+    return;
+  }
+  err.classList.add('hidden');
+  const etf = ETF_DATA[raw];
+  const acctSel = document.querySelector('input[name=acct]:checked').value;
+  const amount = +document.getElementById('amount').value;
+  const years = +document.getElementById('years').value;
+  const monthly = +document.getElementById('monthly').value;
+  const opt = optimalAccount(etf);
+
+  // header
+  document.getElementById('tkBadge').textContent = raw;
+  document.getElementById('tkName').textContent = etf.name;
+  document.getElementById('tkMeta').textContent = etf.assetClass+" · MER "+etf.mer+"% · Yield "+etf.dividendYield+"%";
+  const rb = document.getElementById('tkRating'); rb.textContent = etf.rating; rb.className = "ml-auto px-4 py-2 rounded-full font-bold text-sm badge-best";
+
+  // tax summary
+  const taxRows = [
+    ["US withholding tax", etf.usWithholding],
+    ["Foreign withholding", etf.assetClass.startsWith("US")&&etf.usWithholding.includes("0% in RRSP") ? "15% (avoided in RRSP)" : (etf.assetClass.includes("Swap")?"0% (swap)":"embedded ~0.17%")],
+    ["Dividend tax credit", etf.assetClass.startsWith("Canadian") ? "Eligible — yes" : "N/A"],
+    ["Capital gains treat.", etf.assetClass.includes("Swap") ? "Deferred to cap gain" : "50% taxable (Non-Reg)"]
+  ];
+  document.getElementById('taxTable').innerHTML = taxRows.map(r=>`<tr><td class="text-gray-500">${r[0]}</td><td class="font-semibold text-right">${r[1]}</td></tr>`).join('');
+
+  // recommendation
+  const rec = document.getElementById('recBox');
+  const meta = ACCT_META[opt];
+  rec.innerHTML = `<div class="flex items-center gap-3 mb-2">
+      <span class="px-3 py-1 rounded-full font-bold text-sm ${meta.cls}">${meta.label}</span>
+      <span class="text-sm text-gray-600">${meta.note}</span>
+    </div>
+    <p class="text-[15px] text-gray-700">${recExplanation(etf,opt)}</p>`;
+
+  // drag table (all accounts)
+  const dragRows = ["RRSP","TFSA","NONREG"].map(a=>{
+    const d = taxDragPct(etf,a);
+    const ann = amount*d;
+    const m = ACCT_META[a];
+    const best = a===opt ? '<i class="fa-solid fa-circle-check text-gold"></i>' : '';
+    return `<tr><td><span class="px-2 py-0.5 rounded-full text-xs font-bold ${m.cls}">${m.label}</span></td>
+      <td class="text-right font-semibold">${fmtPct(d)}</td>
+      <td class="text-right">${fmt$(ann)}/yr</td><td class="text-right">${best}</td></tr>`;
+  }).join('');
+  document.getElementById('dragTable').innerHTML =
+    `<tr><th>Account</th><th class="text-right">Drag/yr</th><th class="text-right">$ on ${fmt$(amount)}</th><th></th></tr>`+dragRows;
+
+  // projection
+  const grossReturn = etf.expReturn - etf.mer; // before tax drag
+  const optDrag = taxDragPct(etf,opt);
+  const worstDrag = Math.max(...["RRSP","TFSA","NONREG"].map(a=>taxDragPct(etf,a)));
+  const optSeries = project(amount, monthly, years, grossReturn - optDrag*100);
+  const worstSeries = project(amount, monthly, years, grossReturn - worstDrag*100);
+  const contribSeries = (()=>{let s=[amount];let b=amount;for(let y=1;y<=years;y++){b+=monthly*12;s.push(b);}return s;})();
+
+  document.getElementById('projNote').textContent =
+    `Net return used: ${(grossReturn-optDrag*100).toFixed(2)}%/yr (expected ${(etf.expReturn).toFixed(1)}% − MER ${etf.mer}% − tax drag ${(optDrag*100).toFixed(2)}%). Optimized account (${opt}) vs. worst-fit account.`;
+
+  const labels = Array.from({length:years+1},(_,i)=>"Yr "+i);
+  if(chartRef) chartRef.destroy();
+  const ctx = document.getElementById('perfChart').getContext('2d');
+  chartRef = new Chart(ctx,{
+    type:'line',
+    data:{labels,datasets:[
+      {label:"Optimized ("+opt+")",data:optSeries,borderColor:"#F5A623",backgroundColor:"rgba(245,166,35,.15)",fill:true,tension:.25,borderWidth:3},
+      {label:"Worst-fit account",data:worstSeries,borderColor:"#D32F2F",borderDash:[6,4],fill:false,tension:.25,borderWidth:2},
+      {label:"Contributions",data:contribSeries,borderColor:"#1A2A44",borderDash:[2,3],fill:false,tension:0,borderWidth:1.5}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'},tooltip:{callbacks:{label:c=>c.dataset.label+": "+fmt$(c.parsed.y)}}},scales:{y:{ticks:{callback:v=>"$"+Math.round(v/1000)+"k"}}}}
+  });
+
+  // sample portfolio
+  const port = SAMPLE_PORTFOLIOS[opt];
+  document.getElementById('portNote').textContent = `Suggested allocation if you hold ${raw} inside your ${opt}. Weights are illustrative starting points.`;
+  document.getElementById('portGrid').innerHTML = port.map(p=>`
+    <div class="border rounded-xl p-4 hover:shadow-md transition">
+      <div class="font-extrabold text-navy">${p.t}</div>
+      <div class="text-xs text-gray-500 mb-2">${p.d}</div>
+      <div class="text-2xl font-extrabold text-gold">${p.w}%</div>
+      <div class="h-1.5 bg-grayx rounded-full mt-2"><div class="h-full bg-gold rounded-full" style="width:${p.w}%"></div></div>
+    </div>`).join('');
+
+  // fee analysis
+  const merYear = amount*etf.mer/100;
+  const dragOptYear = amount*optDrag;
+  const tradeFee = 9.99; // assumed per-trade
+  document.getElementById('feeGrid').innerHTML = `
+    <div class="border rounded-xl p-4"><div class="text-sm text-gray-500">MER cost / yr</div><div class="text-xl font-extrabold text-navy">${fmt$(merYear)}</div><div class="text-xs text-gray-400 mt-1">${etf.mer}% of ${fmt$(amount)}</div></div>
+    <div class="border rounded-xl p-4"><div class="text-sm text-gray-500">Tax drag / yr (${opt})</div><div class="text-xl font-extrabold text-navy">${fmt$(dragOptYear)}</div><div class="text-xs text-gray-400 mt-1">${fmtPct(optDrag)} annual</div></div>
+    <div class="border rounded-xl p-4"><div class="text-sm text-gray-500">Est. trading fee</div><div class="text-xl font-extrabold text-navy">${fmt$(tradeFee)}</div><div class="text-xs text-gray-400 mt-1">per buy (typical $9.99)</div></div>`;
+
+  // show + reveal
+  const res = document.getElementById('results');
+  res.classList.remove('hidden');
+  res.querySelectorAll('.reveal').forEach((el,i)=>{ setTimeout(()=>el.classList.add('in'), 60*i); });
+  res.scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+/* ============ EVENTS ============ */
+document.getElementById('analyzeBtn').addEventListener('click',analyze);
+document.getElementById('analyzeBtn2').addEventListener('click',analyze);
+document.getElementById('ticker').addEventListener('keydown',e=>{if(e.key==='Enter')analyze();});
+document.getElementById('amount').addEventListener('input',e=>document.getElementById('amtLbl').textContent=fmt$(+e.target.value));
+document.getElementById('years').addEventListener('input',e=>document.getElementById('yrLbl').textContent=e.target.value+"y");
+document.getElementById('monthly').addEventListener('input',e=>document.getElementById('moLbl').textContent=fmt$(+e.target.value));
+</script>
+</body>
+</html>
