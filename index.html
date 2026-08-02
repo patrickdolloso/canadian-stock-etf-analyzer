@@ -4,13 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Canadian Stock &amp; ETF Analyzer</title>
-<meta name="description" content="Analyze any Canadian/US ETF ticker and get tax-optimized account recommendations, sample portfolios, and projected performance.">
+<meta name="description" content="Analyze any Canadian/US ETF ticker, search live prices, and build tax-optimized portfolios — all in your browser.">
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <script>
   tailwind.config = {
+    darkMode: 'class',
     theme: {
       extend: {
         colors: {
@@ -24,8 +25,17 @@
 </script>
 <style>
   html{scroll-behavior:smooth}
+  body{transition:background-color .35s ease,color .35s ease}
+  .dark body, body.dark{background:#0e1626;color:#e7edf5}
+  .dark .card, .card.dark{background:#16213a;border-color:#26344f;color:#e7edf5}
+  .dark .text-gray-500, body.dark .text-gray-500{color:#9fb0c7}
+  .dark .text-gray-600, body.dark .text-gray-600{color:#c2cee0}
+  .dark .text-gray-400, body.dark .text-gray-400{color:#7e8da6}
+  .dark .text-gray-300, body.dark .text-gray-300{color:#aeb9cc}
+  .dark .border, body.dark .border{border-color:#26344f}
+  .dark .bg-grayx, body.dark .bg-grayx{background:#16213a}
   .grad-text{background:linear-gradient(135deg,var(--tw-colors-gold),#ffc35b);-webkit-background-clip:text;background-clip:text;color:transparent}
-  .card{background:#fff;border-radius:18px;box-shadow:0 14px 40px rgba(26,42,68,.10);border:1px solid #eef1f6}
+  .card{background:#fff;border-radius:18px;box-shadow:0 14px 40px rgba(26,42,68,.10);border:1px solid #eef1f6;transition:background-color .35s ease,border-color .35s ease}
   .chips input:checked + div{outline:3px solid var(--tw-colors-gold);outline-offset:2px}
   input[type=range]{accent-color:#F5A623}
   .reveal{opacity:0;transform:translateY(24px);transition:opacity .7s ease,transform .7s ease}
@@ -34,42 +44,86 @@
   .badge-tfsa{background:rgba(26,42,68,.10);color:#1A2A44}
   .badge-nonreg{background:rgba(211,47,47,.12);color:#a31f1f}
   .badge-best{background:#F5A623;color:#1A2A44}
+  .dark .badge-tfsa{background:rgba(245,166,35,.18);color:#ffc35b}
   table{width:100%;border-collapse:collapse}
   th,td{text-align:left;padding:10px 12px;border-bottom:1px solid #eef1f6;font-size:14px}
+  .dark th,.dark td{border-color:#26344f}
   th{color:#5b6677;font-weight:600}
   .fade-in{animation:fade .5s ease}
   @keyframes fade{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+  mark{background:#F5A62333;color:inherit;border-radius:3px;padding:0 1px}
+  /* search dropdown */
+  .search-wrap{position:relative;max-width:520px}
+  .dd{position:absolute;top:calc(100% + 8px);left:0;right:0;z-index:60;background:#fff;border:1px solid #e6eaf1;border-radius:16px;box-shadow:0 18px 50px rgba(26,42,68,.18);overflow:hidden;max-height:380px;overflow-y:auto}
+  .dark .dd{background:#16213a;border-color:#26344f}
+  .dd-item{display:flex;align-items:center;gap:3px;padding:11px 14px;cursor:pointer;border-bottom:1px solid #f1f3f7}
+  .dd-item:last-child{border-bottom:none}
+  .dark .dd-item{border-color:#1d2a44}
+  .dd-item.active,.dd-item:hover{background:#fff7ea}
+  .dark .dd-item.active,.dark .dd-item:hover{background:#1f2c47}
+  .dd-tk{font-weight:800;font-size:14px;min-width:54px}
+  .dd-nm{font-size:13px;color:#5b6677;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .dark .dd-nm{color:#9fb0c7}
+  .dd-px{font-weight:700;font-size:13px;font-variant-numeric:tabular-nums}
+  .dd-chg{font-size:12px;font-weight:600;min-width:58px;text-align:right;font-variant-numeric:tabular-nums}
+  .up{color:#1a9c5b}.down{color:#D32F2F}
+  .spin{animation:spin 1s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .tabbtn.active{color:#1A2A44;border-bottom:3px solid #F5A623}
+  .dark .tabbtn.active{color:#ffc35b}
+  .pf-row{display:grid;grid-template-columns:1.4fr 1.1fr 110px 130px 36px;gap:10px;align-items:center}
+  @media(max-width:640px){.pf-row{grid-template-columns:1fr 1fr;}}
+  .pill{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px}
+  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1A2A44;color:#fff;padding:12px 20px;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.3);z-index:200;font-size:14px;opacity:0;transition:opacity .3s,transform .3s;pointer-events:none}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(-6px)}
 </style>
 </head>
 <body class="font-sans text-[#1f2733] bg-grayx">
 
 <!-- NAV -->
 <nav class="sticky top-0 z-50 bg-navydeep/95 backdrop-blur text-white">
-  <div class="max-w-6xl mx-auto px-5 py-3 flex items-center justify-between">
-    <div class="font-extrabold text-lg flex items-center gap-2"><i class="fa-solid fa-leaf text-gold"></i> Northern<span class="text-gold">Nomad</span> <span class="text-sm font-medium text-gray-300">· Analyzer</span></div>
-    <a href="https://northernnomad.gumroad.com/l/ftefkt" target="_blank" class="btn-gold px-4 py-2 rounded-full bg-gold text-navy font-bold text-sm hover:scale-105 transition">Get the Full Kit — $19.99</a>
+  <div class="max-w-6xl mx-auto px-5 py-3 flex items-center justify-between gap-3">
+    <div class="font-extrabold text-lg flex items-center gap-2 flex-shrink-0"><i class="fa-solid fa-leaf text-gold"></i> Northern<span class="text-gold">Nomad</span> <span class="text-sm font-medium text-gray-300">· Analyzer</span></div>
+    <div class="flex items-center gap-2">
+      <button id="darkToggle" class="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition" title="Toggle dark mode"><i class="fa-solid fa-moon"></i></button>
+      <a href="https://northernnomad.gumroad.com/l/ftefkt" target="_blank" class="btn-gold px-4 py-2 rounded-full bg-gold text-navy font-bold text-sm hover:scale-105 transition hidden md:inline-block">Get the Full Kit — $19.99</a>
+    </div>
+  </div>
+  <!-- TABS -->
+  <div class="max-w-6xl mx-auto px-5 flex gap-6 border-t border-white/10 text-sm font-semibold text-gray-300">
+    <button class="tabbtn active py-3 -mb-px" data-tab="analyzer"><i class="fa-solid fa-magnifying-glass mr-1"></i>Analyzer</button>
+    <button class="tabbtn py-3 -mb-px" data-tab="builder"><i class="fa-solid fa-layer-group mr-1"></i>Portfolio Builder</button>
   </div>
 </nav>
 
-<!-- HERO / INPUT -->
+<!-- ============ TAB 1: ANALYZER ============ -->
+<section id="tab-analyzer">
 <header class="relative bg-navy text-white overflow-hidden">
   <div class="absolute inset-0 opacity-30" style="background:radial-gradient(circle at 25% 30%,rgba(245,166,35,.35),transparent 45%),radial-gradient(circle at 80% 70%,rgba(26,42,68,.6),transparent 50%)"></div>
   <div class="relative max-w-6xl mx-auto px-5 py-16 grid md:grid-cols-2 gap-12 items-center">
     <div>
       <span class="text-gold font-bold text-sm tracking-widest uppercase">🇨🇦 For Canadian Investors</span>
       <h1 class="text-4xl md:text-5xl font-extrabold mt-3 leading-tight">Canadian Stock &amp; <span class="grad-text">ETF Analyzer</span></h1>
-      <p class="mt-4 text-gray-300 text-lg">Plug in any ticker. Get the tax-optimized account, a sample portfolio, and a 30-year projection — all in your browser.</p>
-      <div class="mt-6 flex gap-3 text-sm text-gray-300">
+      <p class="mt-4 text-gray-300 text-lg">Plug in any ticker — get live price, the tax-optimized account, a sample portfolio, and a 30-year projection.</p>
+      <div class="mt-6 flex gap-3 text-sm text-gray-300 flex-wrap">
         <span class="bg-white/10 px-3 py-1 rounded-full"><i class="fa-solid fa-shield-halved text-gold"></i> TFSA · RRSP · Non-Reg</span>
-        <span class="bg-white/10 px-3 py-1 rounded-full"><i class="fa-solid fa-chart-line text-gold"></i> 10-ETF master list</span>
+        <span class="bg-white/10 px-3 py-1 rounded-full"><i class="fa-solid fa-chart-line text-gold"></i> 15-ETF master list</span>
       </div>
     </div>
 
+    <!-- search + form card -->
     <div class="card p-6 text-[#1f2733]" id="formCard">
-      <label class="block text-sm font-semibold mb-1">Ticker symbol</label>
-      <div class="flex gap-2">
-        <input id="ticker" type="text" placeholder="e.g. VOO, VFV, HXS, VCN, XAW" class="flex-1 border border-gray-300 rounded-xl px-4 py-3 font-semibold uppercase focus:outline-none focus:ring-2 focus:ring-gold" autocomplete="off">
-        <button id="analyzeBtn" class="bg-gold text-navy font-bold px-5 rounded-xl hover:scale-105 transition"><i class="fa-solid fa-magnifying-glass"></i></button>
+      <label class="block text-sm font-semibold mb-1">Search a ticker (live)</label>
+      <div class="search-wrap">
+        <div class="flex gap-2">
+          <div class="relative flex-1">
+            <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+            <input id="search" type="text" placeholder="Type VOO, VFV, VGRO…" class="w-full border border-gray-300 rounded-xl pl-9 pr-9 py-3 font-semibold uppercase focus:outline-none focus:ring-2 focus:ring-gold" autocomplete="off" aria-label="Ticker search">
+            <i id="searchSpin" class="fa-solid fa-spinner spin absolute right-3 top-1/2 -translate-y-1/2 text-gold hidden"></i>
+          </div>
+          <button id="analyzeBtn" class="bg-gold text-navy font-bold px-5 rounded-xl hover:scale-105 transition flex-shrink-0"><i class="fa-solid fa-arrow-right"></i></button>
+        </div>
+        <div id="dd" class="dd hidden"></div>
       </div>
 
       <label class="block text-sm font-semibold mt-5 mb-2">Account type</label>
@@ -101,9 +155,7 @@
   </div>
 </header>
 
-<!-- RESULTS -->
 <main id="results" class="max-w-6xl mx-auto px-5 py-14 hidden">
-  <!-- TICKER HEADER -->
   <div class="flex items-center gap-4 mb-8 reveal">
     <div class="w-14 h-14 rounded-2xl bg-navy text-gold flex items-center justify-center text-2xl font-extrabold" id="tkBadge">VOO</div>
     <div>
@@ -114,13 +166,11 @@
   </div>
 
   <div class="grid md:grid-cols-3 gap-6">
-    <!-- TAX SUMMARY -->
     <section class="card p-6 reveal">
       <h3 class="font-bold text-lg mb-4 flex items-center gap-2"><i class="fa-solid fa-receipt text-gold"></i> Tax Summary</h3>
       <table id="taxTable"></table>
     </section>
 
-    <!-- ACCOUNT RECOMMENDATION -->
     <section class="card p-6 md:col-span-2 reveal">
       <h3 class="font-bold text-lg mb-3 flex items-center gap-2"><i class="fa-solid fa-bullseye text-gold"></i> Account Recommendation</h3>
       <div id="recBox" class="rounded-xl p-5 bg-grayx mb-4"></div>
@@ -129,23 +179,20 @@
     </section>
   </div>
 
-  <!-- PROJECTED PERFORMANCE -->
   <section class="card p-6 mt-6 reveal">
     <h3 class="font-bold text-lg mb-1 flex items-center gap-2"><i class="fa-solid fa-chart-line text-gold"></i> Projected Performance</h3>
     <p class="text-sm text-gray-500 mb-4" id="projNote">—</p>
     <div class="relative h-[360px]"><canvas id="perfChart"></canvas></div>
   </section>
 
-  <!-- SAMPLE PORTFOLIO -->
   <section class="card p-6 mt-6 reveal">
     <h3 class="font-bold text-lg mb-4 flex items-center gap-2"><i class="fa-solid fa-layer-group text-gold"></i> Sample Portfolio</h3>
     <p class="text-sm text-gray-600 mb-4" id="portNote">—</p>
     <div id="portGrid" class="grid sm:grid-cols-2 lg:grid-cols-4 gap-3"></div>
   </section>
 
-  <!-- FEE ANALYSIS -->
   <section class="card p-6 mt-6 reveal">
-    <h3 class="font-bold text-lg mb-4 flex items center gap-2"><i class="fa-solid fa-coins text-gold"></i> Fee &amp; Tax-Drag Analysis</h3>
+    <h3 class="font-bold text-lg mb-4 flex items-center gap-2"><i class="fa-solid fa-coins text-gold"></i> Fee &amp; Tax-Drag Analysis</h3>
     <div class="grid sm:grid-cols-3 gap-4" id="feeGrid"></div>
   </section>
 
@@ -154,6 +201,109 @@
     <p class="text-xs text-gray-400 mt-3">Estimates only · not financial advice · see assumptions below.</p>
   </div>
 </main>
+</section>
+
+<!-- ============ TAB 2: PORTFOLIO BUILDER ============ -->
+<section id="tab-builder" class="hidden">
+<header class="relative bg-navy text-white overflow-hidden">
+  <div class="absolute inset-0 opacity-30" style="background:radial-gradient(circle at 25% 30%,rgba(245,166,35,.35),transparent 45%),radial-gradient(circle at 80% 70%,rgba(26,42,68,.6),transparent 50%)"></div>
+  <div class="relative max-w-6xl mx-auto px-5 py-12">
+    <span class="text-gold font-bold text-sm tracking-widest uppercase">🧰 Portfolio Builder</span>
+    <h1 class="text-3xl md:text-4xl font-extrabold mt-2">Build &amp; <span class="grad-text">Tax-Optimize</span> Your Portfolio</h1>
+    <p class="mt-3 text-gray-300 max-w-2xl">Add tickers, set allocations, and see projected growth with vs. without account-location optimization. Your portfolio is saved in your browser automatically.</p>
+  </div>
+</header>
+
+<main class="max-w-6xl mx-auto px-5 py-10">
+  <div class="grid lg:grid-cols-3 gap-6 items-start">
+    <!-- LEFT: search + add -->
+    <div class="card p-5">
+      <h3 class="font-bold text-lg mb-3 flex items-center gap-2"><i class="fa-solid fa-plus text-gold"></i> Add a holding</h3>
+      <div class="search-wrap">
+        <div class="relative">
+          <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+          <input id="pbSearch" type="text" placeholder="Search ticker or name…" class="w-full border border-gray-300 rounded-xl pl-9 pr-9 py-3 font-semibold focus:outline-none focus:ring-2 focus:ring-gold" autocomplete="off" aria-label="Portfolio search">
+          <i id="pbSpin" class="fa-solid fa-spinner spin absolute right-3 top-1/2 -translate-y-1/2 text-gold hidden"></i>
+        </div>
+        <div id="pbDd" class="dd hidden"></div>
+      </div>
+      <p class="text-xs text-gray-400 mt-2">Tip: search US-listed (VOO, VTI) and CAD-listed (VFV, VCN, XGRO) ETFs. Live prices via Twelve Data with offline fallback.</p>
+    </div>
+
+    <!-- CENTER: portfolio list -->
+    <div class="card p-5 lg:col-span-2">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="font-bold text-lg flex items-center gap-2"><i class="fa-solid fa-list text-gold"></i> Holdings</h3>
+        <div class="text-sm">
+          <span class="text-gray-500">Total allocation: </span>
+          <span id="totalAlloc" class="font-extrabold text-gold">0%</span>
+        </div>
+      </div>
+      <div id="allocWarn" class="text-sm font-semibold mb-3 hidden px-3 py-2 rounded-lg"></div>
+      <div id="pfList" class="space-y-2"></div>
+      <p id="pfEmpty" class="text-sm text-gray-400 py-6 text-center">No holdings yet. Search above to add one.</p>
+      <div class="flex flex-wrap gap-2 mt-4 pt-4 border-t border-gray-100 dark:border-[#26344f]">
+        <button id="saveBtn" class="px-3 py-2 rounded-lg bg-navy text-white text-sm font-semibold hover:bg-navydeep transition"><i class="fa-solid fa-floppy-disk mr-1"></i>Save</button>
+        <button id="loadBtn" class="px-3 py-2 rounded-lg border text-sm font-semibold hover:bg-grayx transition"><i class="fa-solid fa-folder-open mr-1"></i>Load</button>
+        <button id="shareBtn" class="px-3 py-2 rounded-lg border text-sm font-semibold hover:bg-grayx transition"><i class="fa-solid fa-link mr-1"></i>Share link</button>
+        <button id="exportBtn" class="px-3 py-2 rounded-lg border text-sm font-semibold hover:bg-grayx transition"><i class="fa-solid fa-file-pdf mr-1"></i>Export PDF</button>
+        <button id="clearBtn" class="px-3 py-2 rounded-lg border text-sm font-semibold hover:bg-redx/10 text-redx transition ml-auto"><i class="fa-solid fa-trash mr-1"></i>Clear</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- INPUTS -->
+  <div class="card p-6 mt-6">
+    <h3 class="font-bold text-lg mb-4 flex items-center gap-2"><i class="fa-solid fa-sliders text-gold"></i> Projection Inputs</h3>
+    <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+      <div>
+        <label class="block text-sm font-semibold mb-1">Total investment: <span id="pbAmtLbl" class="text-gold">$100,000</span></label>
+        <input id="pbAmount" type="range" min="1000" max="1000000" step="1000" value="100000" class="w-full">
+      </div>
+      <div>
+        <label class="block text-sm font-semibold mb-1">Time horizon: <span id="pbYrLbl" class="text-gold">20y</span></label>
+        <input id="pbYears" type="range" min="1" max="30" step="1" value="20" class="w-full">
+      </div>
+      <div>
+        <label class="block text-sm font-semibold mb-1">Monthly contribution: <span id="pbMoLbl" class="text-gold">$500</span></label>
+        <input id="pbMonthly" type="range" min="0" max="10000" step="50" value="500" class="w-full">
+      </div>
+      <div>
+        <label class="block text-sm font-semibold mb-1">Return rate: <span id="pbRetLbl" class="text-gold">7%</span></label>
+        <input id="pbReturn" type="range" min="3" max="12" step="0.5" value="7" class="w-full">
+      </div>
+    </div>
+  </div>
+
+  <!-- METRIC CARDS -->
+  <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6" id="metricCards">
+    <div class="card p-5"><div class="text-sm text-gray-500 font-semibold">Optimized Value</div><div class="text-2xl font-extrabold text-gold mt-1" id="mcOpt">—</div><div class="text-xs text-gray-400 mt-1">recommended account location</div></div>
+    <div class="card p-5"><div class="text-sm text-gray-500 font-semibold">Non-Optimized Value</div><div class="text-2xl font-extrabold text-navy mt-1" id="mcNon">—</div><div class="text-xs text-gray-400 mt-1">all in worst-fit account</div></div>
+    <div class="card p-5"><div class="text-sm text-gray-500 font-semibold">Tax Savings</div><div class="text-2xl font-extrabold text-greenx mt-1" id="mcSave" style="color:#1a9c5b">—</div><div class="text-xs text-gray-400 mt-1">over the horizon</div></div>
+    <div class="card p-5"><div class="text-sm text-gray-500 font-semibold">Effective Return</div><div class="text-2xl font-extrabold text-navy mt-1" id="mcEff">—</div><div class="text-xs text-gray-400 mt-1">after tax drag</div></div>
+  </div>
+
+  <!-- CHARTS -->
+  <div class="grid lg:grid-cols-2 gap-6 mt-6">
+    <div class="card p-6 reveal"><h3 class="font-bold text-lg mb-3 flex items-center gap-2"><i class="fa-solid fa-chart-line text-gold"></i> Growth: Optimized vs Non-Optimized</h3><div class="relative h-[320px]"><canvas id="growthChart"></canvas></div></div>
+    <div class="card p-6 reveal"><h3 class="font-bold text-lg mb-3 flex items-center gap-2"><i class="fa-solid fa-chart-pie text-gold"></i> Asset Allocation</h3><div class="relative h-[320px]"><canvas id="donutChart"></canvas></div></div>
+    <div class="card p-6 reveal"><h3 class="font-bold text-lg mb-3 flex items-center gap-2"><i class="fa-solid fa-chart-bar text-gold"></i> Annual Tax Drag by Holding</h3><div class="relative h-[320px]"><canvas id="dragChart"></canvas></div></div>
+    <div class="card p-6 reveal"><h3 class="font-bold text-lg mb-3 flex items-center gap-2"><i class="fa-solid fa-building-columns text-gold"></i> Account Type Allocation</h3><div class="relative h-[320px]"><canvas id="acctChart"></canvas></div></div>
+  </div>
+
+  <!-- RECOMMENDATIONS -->
+  <div class="card p-6 mt-6 reveal">
+    <h3 class="font-bold text-lg mb-3 flex items-center gap-2"><i class="fa-solid fa-lightbulb text-gold"></i> Optimization Recommendations</h3>
+    <div id="recList" class="space-y-2"></div>
+    <div class="grid sm:grid-cols-3 gap-4 mt-4" id="holdStats"></div>
+  </div>
+
+  <div class="mt-8 text-center">
+    <a href="https://northernnomad.gumroad.com/l/ftefkt" target="_blank" class="inline-block bg-gold text-navy font-bold px-8 py-4 rounded-full hover:scale-105 transition">Get the full Advanced Investor Kit — $19.99</a>
+    <p class="text-xs text-gray-400 mt-3">Estimates only · not financial advice.</p>
+  </div>
+</main>
+</section>
 
 <!-- FOOTER -->
 <footer class="bg-navydeep text-gray-300 py-10 mt-10">
@@ -165,76 +315,80 @@
     <div class="text-sm text-gray-400">
       <p class="font-semibold text-white mb-2">Assumptions &amp; caveats</p>
       <ul class="list-disc pl-5 space-y-1">
-        <li>Projections use illustrative expected returns (US eq ~7%, CDN eq ~6.5%, global ~6.8%, bonds ~3.5%) minus MER.</li>
-        <li>Tax drag = yield × applicable rate (US withholding 15%, CDN div tax credit ~refund, swap 0%). Educational estimates, not advice.</li>
-        <li>Non-resident TFSA 1%/month penalty not modeled here — covered in the full Kit.</li>
+        <li>Projections use an expected return you set (default 7%) minus MER and tax drag.</li>
+        <li>Tax drag = yield × withholding/income rate. US-listed US equities: 0% in RRSP, 15% in TFSA/Non-Reg. Swap ETFs: 0% distribution drag.</li>
+        <li>Non-resident TFSA penalty, rebalancing, and contribution-room limits not modeled — covered in the full Kit.</li>
         <li>Consult a cross-border tax professional before acting.</li>
       </ul>
     </div>
   </div>
 </footer>
 
+<div id="toast" class="toast"></div>
+
 <script>
 /* ============ DATA ============ */
+/* region: US / Canada / Intl / Bond ; structured -> allocation mix for donut */
 const ETF_DATA = {
-  "VOO": { name: "Vanguard S&P 500 (US-listed)", assetClass: "US Large-Cap", mer: 0.03, dividendYield: 1.2, usWithholding: "0% in RRSP, 15% in TFSA/Non-Reg", taxTreatment: "RRSP best", rating: "RRSP BEST", expReturn: 7.0 },
-  "VFV": { name: "Vanguard S&P 500 (CAD-listed)", assetClass: "US Large-Cap", mer: 0.09, dividendYield: 1.2, usWithholding: "~0.17% embedded drag", taxTreatment: "TFSA good, RRSP suboptimal", rating: "TFSA GOOD", expReturn: 7.0 },
-  "HXS": { name: "Horizons S&P 500 (Swap-based)", assetClass: "US Large-Cap (Swap)", mer: 0.10, dividendYield: 0, usWithholding: "0%", taxTreatment: "TFSA/Non-Reg best", rating: "TFSA BEST", expReturn: 7.0 },
-  "VCN": { name: "Vanguard FTSE Canada All Cap", assetClass: "Canadian Equity", mer: 0.05, dividendYield: 2.8, usWithholding: "0%", taxTreatment: "Non-Reg best (div tax credit)", rating: "Non-Reg BEST", expReturn: 6.5 },
-  "XIC": { name: "iShares Core S&P/TSX Capped Composite", assetClass: "Canadian Equity", mer: 0.06, dividendYield: 2.8, usWithholding: "0%", taxTreatment: "Non-Reg best", rating: "Non-Reg BEST", expReturn: 6.5 },
-  "XAW": { name: "iShares MSCI ACWI ex Canada", assetClass: "Global ex-Canada", mer: 0.22, dividendYield: 1.8, usWithholding: "~0.17% embedded", taxTreatment: "TFSA best", rating: "TFSA BEST", expReturn: 6.8 },
-  "ZAG": { name: "BMO Aggregate Bond", assetClass: "Bonds", mer: 0.09, dividendYield: 3.5, usWithholding: "0%", taxTreatment: "TFSA/RRSP best", rating: "TFSA BEST", expReturn: 3.5 },
-  "HXT": { name: "Horizons S&P/TSX 60 (Swap)", assetClass: "Canadian (Swap)", mer: 0.04, dividendYield: 0, usWithholding: "0%", taxTreatment: "Non-Reg best", rating: "Non-Reg BEST", expReturn: 6.5 },
-  "VTI": { name: "Vanguard Total Stock Market (US-listed)", assetClass: "US Total Market", mer: 0.03, dividendYield: 1.3, usWithholding: "0% in RRSP, 15% in TFSA/Non-Reg", taxTreatment: "RRSP best", rating: "RRSP BEST", expReturn: 7.0 },
-  "XEQT": { name: "iShares Core Equity Portfolio", assetClass: "100% Equity", mer: 0.20, dividendYield: 1.8, usWithholding: "~0.10-0.20%", taxTreatment: "TFSA best", rating: "TFSA BEST", expReturn: 6.8 }
+  "VOO":   {name:"Vanguard S&P 500 (US-listed)",assetClass:"US Large-Cap",region:"US",mer:0.03,dividendYield:1.2,usWithholding:"0% in RRSP, 15% in TFSA/Non-Reg",taxTreatment:"RRSP best",rating:"RRSP BEST",expReturn:7.0,alloc:{equity:100,canada:0,us:100,intl:0,bond:0}},
+  "VTI":   {name:"Vanguard Total Stock Market (US-listed)",assetClass:"US Total Market",region:"US",mer:0.03,dividendYield:1.3,usWithholding:"0% in RRSP, 15% in TFSA/Non-Reg",taxTreatment:"RRSP best",rating:"RRSP BEST",expReturn:7.0,alloc:{equity:100,canada:0,us:100,intl:0,bond:0}},
+  "VFV":   {name:"Vanguard S&P 500 (CAD-listed)",assetClass:"US Large-Cap",region:"Canada",mer:0.09,dividendYield:1.2,usWithholding:"~0.17% embedded drag",taxTreatment:"TFSA good, RRSP suboptimal",rating:"TFSA GOOD",expReturn:7.0,alloc:{equity:100,canada:0,us:100,intl:0,bond:0}},
+  "HXS":   {name:"Horizons S&P 500 (Swap-based)",assetClass:"US Large-Cap (Swap)",region:"Canada",mer:0.10,dividendYield:0,usWithholding:"0%",taxTreatment:"TFSA/Non-Reg best",rating:"TFSA BEST",expReturn:7.0,alloc:{equity:100,canada:0,us:100,intl:0,bond:0}},
+  "VCN":   {name:"Vanguard FTSE Canada All Cap",assetClass:"Canadian Equity",region:"Canada",mer:0.05,dividendYield:2.8,usWithholding:"0%",taxTreatment:"Non-Reg best (div tax credit)",rating:"Non-Reg BEST",expReturn:6.5,alloc:{equity:100,canada:100,us:0,intl:0,bond:0}},
+  "XIC":   {name:"iShares Core S&P/TSX Capped Composite",assetClass:"Canadian Equity",region:"Canada",mer:0.06,dividendYield:2.8,usWithholding:"0%",taxTreatment:"Non-Reg best",rating:"Non-Reg BEST",expReturn:6.5,alloc:{equity:100,canada:100,us:0,intl:0,bond:0}},
+  "HXT":   {name:"Horizons S&P/TSX 60 (Swap)",assetClass:"Canadian (Swap)",region:"Canada",mer:0.04,dividendYield:0,usWithholding:"0%",taxTreatment:"Non-Reg best",rating:"Non-Reg BEST",expReturn:6.5,alloc:{equity:100,canada:100,us:0,intl:0,bond:0}},
+  "XAW":   {name:"iShares MSCI ACWI ex Canada",assetClass:"Global ex-Canada",region:"Intl",mer:0.22,dividendYield:1.8,usWithholding:"~0.17% embedded",taxTreatment:"TFSA best",rating:"TFSA BEST",expReturn:6.8,alloc:{equity:100,canada:0,us:60,intl:40,bond:0}},
+  "ZAG":   {name:"BMO Aggregate Bond",assetClass:"Bonds",region:"Canada",mer:0.09,dividendYield:3.5,usWithholding:"0%",taxTreatment:"TFSA/RRSP best",rating:"TFSA BEST",expReturn:3.5,alloc:{equity:0,canada:0,us:0,intl:0,bond:100}},
+  "XEQT":  {name:"iShares Core Equity Portfolio",assetClass:"100% Equity",region:"Intl",mer:0.20,dividendYield:1.8,usWithholding:"~0.10-0.20%",taxTreatment:"TFSA best",rating:"TFSA BEST",expReturn:6.8,alloc:{equity:100,canada:25,us:45,intl:30,bond:0}},
+  /* NEW multi-asset ETFs */
+  "XGRO":  {name:"iShares Core Growth ETF Portfolio",assetClass:"80/20 Growth",region:"Intl",mer:0.20,dividendYield:2.0,usWithholding:"~0.15%",taxTreatment:"TFSA best",rating:"TFSA BEST",expReturn:6.3,alloc:{equity:80,canada:20,us:45,intl:35,bond:20}},
+  "VGRO":  {name:"Vanguard Growth ETF Portfolio",assetClass:"80/20 Growth",region:"Intl",mer:0.24,dividendYield:2.1,usWithholding:"~0.15%",taxTreatment:"TFSA best",rating:"TFSA BEST",expReturn:6.3,alloc:{equity:80,canada:24,us:36,intl:20,bond:20}},
+  "XBAL":  {name:"iShares Core Balanced ETF Portfolio",assetClass:"60/40 Balanced",region:"Intl",mer:0.20,dividendYield:2.3,usWithholding:"~0.15%",taxTreatment:"TFSA best",rating:"TFSA BEST",expReturn:5.6,alloc:{equity:60,canada:18,us:34,intl:28,bond:40}},
+  "VBAL":  {name:"Vanguard Balanced ETF Portfolio",assetClass:"60/40 Balanced",region:"Intl",mer:0.24,dividendYield:2.4,usWithholding:"~0.15%",taxTreatment:"TFSA best",rating:"TFSA BEST",expReturn:5.6,alloc:{equity:60,canada:18,us:28,intl:14,bond:40}},
+  "VEQT":  {name:"Vanguard All-Equity ETF Portfolio",assetClass:"100% Equity",region:"Intl",mer:0.24,dividendYield:1.9,usWithholding:"~0.15%",taxTreatment:"TFSA best",rating:"TFSA BEST",expReturn:6.8,alloc:{equity:100,canada:30,us:40,intl:30,bond:0}}
 };
 
-/* expected marginal tax rate (illustrative, top Ontario-ish) for income interest/div */
+const ALLOC_KEYS = ["equity","canada","us","intl","bond"];
+
+/* expected marginal tax rate (illustrative) */
 const MTR = 0.43;
 
-/* optimal account from rating */
 function optimalAccount(etf){
   const r = etf.rating;
   if(r.includes("RRSP")) return "RRSP";
   if(r.includes("Non-Reg")) return "NONREG";
-  return "TFSA"; // TFSA BEST / TFSA GOOD
+  return "TFSA";
 }
 
-/* annual tax drag % by account for a holding of given yield (return as decimal fraction of value) */
+/* annual tax drag % by account (decimal fraction of holding value) */
 function taxDragPct(etf, acct){
   const y = etf.dividendYield/100;
   if(acct==="RRSP"){
-    // US-listed US equities: 0 US withholding. Others: still 0 US wh in RRSP only if US-listed; CAD-listed keep embedded.
     if(etf.assetClass.startsWith("US") && etf.usWithholding.includes("0% in RRSP")) return 0;
-    if(etf.assetClass.includes("Swap")) return 0; // swap: no distributions
-    if(etf.assetClass==="Bonds") return 0; // interest sheltered in RRSP
-    if(etf.assetClass.startsWith("Canadian") || etf.assetClass==="Global ex-Canada" || etf.assetClass==="100% Equity")
-      return y*0; // no annual drag modeled (no withholding); MER separate
-    return y*0.15; // fallback US wh
+    if(etf.assetClass.includes("Swap")) return 0;
+    if(etf.assetClass==="Bonds") return 0;
+    if(etf.assetClass.startsWith("Canadian") || etf.assetClass==="Global ex-Canada" || etf.assetClass==="100% Equity" || /Growth|Balanced/.test(etf.assetClass)) return 0;
+    return y*0.15;
   }
   if(acct==="TFSA"){
     if(etf.assetClass.includes("Swap")) return 0;
     if(etf.assetClass.startsWith("US")){
-      // US-listed: 15% withholding on dividends; CAD-listed: ~0.17% embedded
       if(etf.usWithholding.includes("0% in RRSP")) return y*0.15;
-      return 0.0017; // embedded drag ~0.17%
+      return 0.0017;
     }
-    if(etf.assetClass==="Bonds") return 0; // sheltered
-    if(etf.assetClass.startsWith("Canadian") || etf.assetClass==="Global ex-Canada" || etf.assetClass==="100% Equity") return 0;
+    if(etf.assetClass==="Bonds") return 0;
+    if(etf.assetClass.startsWith("Canadian") || etf.assetClass==="Global ex-Canada" || etf.assetClass==="100% Equity" || /Growth|Balanced/.test(etf.assetClass)) return 0;
     return 0;
   }
   // NONREG
-  if(etf.assetClass.includes("Swap")) return 0; // capital gains only
-  if(etf.assetClass.startsWith("Canadian")){
-    // dividend tax credit ~ offsets most; model small net (eligible div ~ net 10% of gross)
-    return y*0.10;
-  }
+  if(etf.assetClass.includes("Swap")) return 0;
+  if(etf.assetClass.startsWith("Canadian")) return y*0.10;
   if(etf.assetClass.startsWith("US")){
-    if(etf.usWithholding.includes("0% in RRSP")) return y*(0.15 + (1-0.15)*MTR); // 15% wh + remaining taxed at MTR
+    if(etf.usWithholding.includes("0% in RRSP")) return y*(0.15 + (1-0.15)*MTR);
     return y*MTR + 0.0017;
   }
-  if(etf.assetClass==="Bonds") return y*MTR; // interest fully taxed
-  if(etf.assetClass==="Global ex-Canada" || etf.assetClass==="100% Equity") return 0.0017 + y*MTR*0.5;
+  if(etf.assetClass==="Bonds") return y*MTR;
+  if(etf.assetClass==="Global ex-Canada" || etf.assetClass==="100% Equity" || /Growth|Balanced/.test(etf.assetClass)) return 0.0017 + y*MTR*0.5;
   return y*MTR;
 }
 
@@ -244,7 +398,6 @@ const ACCT_META = {
   NONREG: {label:"Non-Reg",     cls:"badge-nonreg",note:"Canadian equity → dividend tax credit"}
 };
 
-/* account recommendations explanation */
 function recExplanation(etf, opt){
   const why = {
     RRSP:"US-listed US equities escape the 15% US withholding tax inside an RRSP thanks to the Canada–US tax treaty. This is the single biggest account-location win for VOO/VTI holders.",
@@ -254,7 +407,6 @@ function recExplanation(etf, opt){
   return why[opt];
 }
 
-/* sample portfolio per optimal account */
 const SAMPLE_PORTFOLIOS = {
   RRSP: [
     {t:"VOO",d:"US S&P 500 (0% wh)",w:40},
@@ -279,8 +431,8 @@ const SAMPLE_PORTFOLIOS = {
 /* ============ HELPERS ============ */
 const fmt$ = n => "$"+Math.round(n).toLocaleString('en-CA');
 const fmtPct = n => (n*100).toFixed(2)+"%";
+const fmtPct1 = n => (n*100).toFixed(1)+"%";
 
-/* projected value: monthly contributions + lump, monthly compounding */
 function project(principal, monthly, years, annualNetReturnPct){
   const r = annualNetReturnPct/100/12;
   const months = years*12;
@@ -290,15 +442,146 @@ function project(principal, monthly, years, annualNetReturnPct){
     bal = bal*(1+r) + monthly;
     if(m%12===0) series.push(bal);
   }
-  // ensure last year captured
   if(series.length < years+1) series.push(bal);
   return series;
 }
 
-/* ============ RENDER ============ */
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(t._t); t._t = setTimeout(()=>t.classList.remove('show'), 2200);
+}
+
+function escapeHtml(s){return String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+function highlight(text, q){
+  if(!q) return escapeHtml(text);
+  const i = text.toLowerCase().indexOf(q.toLowerCase());
+  if(i<0) return escapeHtml(text);
+  return escapeHtml(text.slice(0,i))+"<mark>"+escapeHtml(text.slice(i,i+q.length))+"</mark>"+escapeHtml(text.slice(i+q.length));
+}
+
+/* ============ LIVE PRICE FETCH (Twelve Data) ============ */
+const TD_KEY = "YOUR_TWELVE_DATA_KEY"; // <-- insert free key from twelvedata.com for live prices
+const priceCache = {}; // ticker -> {price, change, ts}
+async function fetchLivePrice(ticker){
+  const now = Date.now();
+  if(priceCache[ticker] && now - priceCache[ticker].ts < 5*60*1000) return priceCache[ticker];
+  if(TD_KEY === "YOUR_TWELVE_DATA_KEY"){
+    return null; // no key -> fallback to static
+  }
+  try{
+    const url = `https://api.twelvedata.com/quote?symbol=${encodeURIComponent(ticker)}&apikey=${TD_KEY}`;
+    const res = await fetch(url);
+    const j = await res.json();
+    if(j && j.status==="ok" && j.close!=null){
+      const price = parseFloat(j.close);
+      const prev = parseFloat(j.previous_close);
+      const change = prev ? (price-prev)/prev*100 : 0;
+      const data = {price, change, ts:now, cap:j.market_cap || null};
+      priceCache[ticker] = data;
+      return data;
+    }
+  }catch(e){ /* network error -> fallback */ }
+  return null;
+}
+
+/* ============ SEARCH DROPDOWN (reusable) ============ */
+function makeSearch(inputEl, ddEl, spinEl, onSelectCb){
+  let activeIdx = -1, results = [];
+  const debounce = (fn,ms)=>{let t;return(...a)=>{clearTimeout(t);t=setTimeout(()=>fn(...a),ms);};};
+
+  function render(){
+    if(!results.length){
+      ddEl.innerHTML = `<div class="px-4 py-3 text-sm text-gray-500 flex items-center justify-between">
+        <span>No results found for "<b>${escapeHtml(inputEl.value)}</b>"</span>
+        <a class="text-gold font-semibold" href="https://www.google.com/search?q=${encodeURIComponent(inputEl.value+' ETF')}" target="_blank">Search web <i class="fa-solid fa-arrow-up-right-from-square"></i></a>
+      </div>`;
+      ddEl.classList.remove('hidden');
+      return;
+    }
+    const q = inputEl.value.trim();
+    ddEl.innerHTML = results.map((r,i)=>{
+      const etf = ETF_DATA[r.ticker];
+      const px = r.price!=null ? fmt$(r.price) : (etf?etf.expReturn+'% exp':'');
+      const chg = r.change!=null ? `<div class="dd-chg ${r.change>=0?'up':'down'}">${r.change>=0?'▲':'▼'} ${Math.abs(r.change).toFixed(2)}%</div>` : '';
+      return `<div class="dd-item ${i===activeIdx?'active':''}" data-i="${i}">
+        <div class="dd-tk">${highlight(r.ticker,q)}</div>
+        <div class="dd-nm">${highlight(etf?etf.name:r.ticker,q)}</div>
+        <div class="dd-px">${px}</div>
+        ${chg}
+      </div>`;
+    }).join('');
+    ddEl.classList.remove('hidden');
+    ddEl.querySelectorAll('.dd-item').forEach(el=>{
+      el.addEventListener('mousedown', e=>{ e.preventDefault(); select(+el.dataset.i); });
+    });
+  }
+
+  async function runSearch(){
+    const q = inputEl.value.trim();
+    spinEl.classList.remove('hidden');
+    if(!q){ ddEl.classList.add('hidden'); spinEl.classList.add('hidden'); return; }
+    const ql = q.toLowerCase();
+    const matches = Object.keys(ETF_DATA).filter(t=>{
+      const e = ETF_DATA[t];
+      return t.toLowerCase().includes(ql) || e.name.toLowerCase().includes(ql) || (e.assetClass||'').toLowerCase().includes(ql);
+    }).slice(0,8);
+    results = matches.map(t=>({ticker:t}));
+    // try live price for top matches
+    await Promise.all(results.map(async r=>{
+      const d = await fetchLivePrice(r.ticker);
+      if(d){ r.price = d.price; r.change = d.change; r.cap = d.cap; }
+    }));
+    spinEl.classList.add('hidden');
+    if(document.activeElement===inputEl) render();
+  }
+
+  const debounced = debounce(runSearch, 300);
+
+  function select(i){
+    const r = results[i];
+    if(!r) return;
+    inputEl.value = r.ticker;
+    ddEl.classList.add('hidden');
+    if(onSelectCb) onSelectCb(r.ticker);
+    else defaultSelect(r.ticker);
+  }
+
+  function defaultSelect(ticker){ // analyzer: analyze + show results
+    switchTab('analyzer');
+    document.getElementById('search').value = ticker;
+    analyzeFromTicker(ticker);
+  }
+
+  inputEl.addEventListener('input', ()=>{ activeIdx=-1; debounced(); });
+  inputEl.addEventListener('focus', ()=>{ if(inputEl.value.trim()) debounced(); });
+  inputEl.addEventListener('keydown', e=>{
+    if(ddEl.classList.contains('hidden') && e.key!=='Enter') return;
+    if(e.key==='ArrowDown'){ e.preventDefault(); activeIdx=Math.min(activeIdx+1, results.length-1); render(); }
+    else if(e.key==='ArrowUp'){ e.preventDefault(); activeIdx=Math.max(activeIdx-1,0); render(); }
+    else if(e.key==='Enter'){ e.preventDefault(); if(activeIdx>=0) select(activeIdx); else if(results.length) select(0); }
+    else if(e.key==='Escape'){ ddEl.classList.add('hidden'); }
+  });
+  document.addEventListener('click', e=>{
+    if(!ddEl.contains(e.target) && e.target!==inputEl && !inputEl.parentElement.contains(e.target)) ddEl.classList.add('hidden');
+  });
+
+  return { render, setResults:(r)=>{results=r;render();}, close:()=>ddEl.classList.add('hidden') };
+}
+
+/* ============ TABS ============ */
+function switchTab(name){
+  document.querySelectorAll('.tabbtn').forEach(b=>b.classList.toggle('active', b.dataset.tab===name));
+  document.getElementById('tab-analyzer').classList.toggle('hidden', name!=='analyzer');
+  document.getElementById('tab-builder').classList.toggle('hidden', name!=='builder');
+  if(name==='builder') ensureBuilderCharts();
+}
+document.querySelectorAll('.tabbtn').forEach(b=>b.addEventListener('click',()=>switchTab(b.dataset.tab)));
+
+/* ============ ANALYZER ============ */
 let chartRef=null;
-function analyze(){
-  const raw = document.getElementById('ticker').value.trim().toUpperCase();
+function analyzeFromTicker(raw){
+  raw = (raw||'').trim().toUpperCase();
   const err = document.getElementById('errMsg');
   if(!ETF_DATA[raw]){
     err.textContent = "Ticker not in the master list. Try: "+Object.keys(ETF_DATA).join(", ");
@@ -313,13 +596,11 @@ function analyze(){
   const monthly = +document.getElementById('monthly').value;
   const opt = optimalAccount(etf);
 
-  // header
   document.getElementById('tkBadge').textContent = raw;
   document.getElementById('tkName').textContent = etf.name;
   document.getElementById('tkMeta').textContent = etf.assetClass+" · MER "+etf.mer+"% · Yield "+etf.dividendYield+"%";
   const rb = document.getElementById('tkRating'); rb.textContent = etf.rating; rb.className = "ml-auto px-4 py-2 rounded-full font-bold text-sm badge-best";
 
-  // tax summary
   const taxRows = [
     ["US withholding tax", etf.usWithholding],
     ["Foreign withholding", etf.assetClass.startsWith("US")&&etf.usWithholding.includes("0% in RRSP") ? "15% (avoided in RRSP)" : (etf.assetClass.includes("Swap")?"0% (swap)":"embedded ~0.17%")],
@@ -328,7 +609,6 @@ function analyze(){
   ];
   document.getElementById('taxTable').innerHTML = taxRows.map(r=>`<tr><td class="text-gray-500">${r[0]}</td><td class="font-semibold text-right">${r[1]}</td></tr>`).join('');
 
-  // recommendation
   const rec = document.getElementById('recBox');
   const meta = ACCT_META[opt];
   rec.innerHTML = `<div class="flex items-center gap-3 mb-2">
@@ -337,7 +617,6 @@ function analyze(){
     </div>
     <p class="text-[15px] text-gray-700">${recExplanation(etf,opt)}</p>`;
 
-  // drag table (all accounts)
   const dragRows = ["RRSP","TFSA","NONREG"].map(a=>{
     const d = taxDragPct(etf,a);
     const ann = amount*d;
@@ -350,8 +629,7 @@ function analyze(){
   document.getElementById('dragTable').innerHTML =
     `<tr><th>Account</th><th class="text-right">Drag/yr</th><th class="text-right">$ on ${fmt$(amount)}</th><th></th></tr>`+dragRows;
 
-  // projection
-  const grossReturn = etf.expReturn - etf.mer; // before tax drag
+  const grossReturn = etf.expReturn - etf.mer;
   const optDrag = taxDragPct(etf,opt);
   const worstDrag = Math.max(...["RRSP","TFSA","NONREG"].map(a=>taxDragPct(etf,a)));
   const optSeries = project(amount, monthly, years, grossReturn - optDrag*100);
@@ -374,7 +652,6 @@ function analyze(){
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'},tooltip:{callbacks:{label:c=>c.dataset.label+": "+fmt$(c.parsed.y)}}},scales:{y:{ticks:{callback:v=>"$"+Math.round(v/1000)+"k"}}}}
   });
 
-  // sample portfolio
   const port = SAMPLE_PORTFOLIOS[opt];
   document.getElementById('portNote').textContent = `Suggested allocation if you hold ${raw} inside your ${opt}. Weights are illustrative starting points.`;
   document.getElementById('portGrid').innerHTML = port.map(p=>`
@@ -385,29 +662,310 @@ function analyze(){
       <div class="h-1.5 bg-grayx rounded-full mt-2"><div class="h-full bg-gold rounded-full" style="width:${p.w}%"></div></div>
     </div>`).join('');
 
-  // fee analysis
   const merYear = amount*etf.mer/100;
   const dragOptYear = amount*optDrag;
-  const tradeFee = 9.99; // assumed per-trade
+  const tradeFee = 9.99;
   document.getElementById('feeGrid').innerHTML = `
     <div class="border rounded-xl p-4"><div class="text-sm text-gray-500">MER cost / yr</div><div class="text-xl font-extrabold text-navy">${fmt$(merYear)}</div><div class="text-xs text-gray-400 mt-1">${etf.mer}% of ${fmt$(amount)}</div></div>
     <div class="border rounded-xl p-4"><div class="text-sm text-gray-500">Tax drag / yr (${opt})</div><div class="text-xl font-extrabold text-navy">${fmt$(dragOptYear)}</div><div class="text-xs text-gray-400 mt-1">${fmtPct(optDrag)} annual</div></div>
     <div class="border rounded-xl p-4"><div class="text-sm text-gray-500">Est. trading fee</div><div class="text-xl font-extrabold text-navy">${fmt$(tradeFee)}</div><div class="text-xs text-gray-400 mt-1">per buy (typical $9.99)</div></div>`;
 
-  // show + reveal
   const res = document.getElementById('results');
   res.classList.remove('hidden');
   res.querySelectorAll('.reveal').forEach((el,i)=>{ setTimeout(()=>el.classList.add('in'), 60*i); });
   res.scrollIntoView({behavior:'smooth',block:'start'});
 }
 
+function analyze(){
+  const raw = document.getElementById('search').value.trim().toUpperCase();
+  analyzeFromTicker(raw);
+}
+
+/* ============ PORTFOLIO BUILDER ============ */
+const LS_KEY = "nn_portfolio_v1";
+let PORTFOLIO = []; // {ticker, allocation, account}
+let builderCharts = {};
+
+function savePortfolioLS(){ localStorage.setItem(LS_KEY, JSON.stringify(PORTFOLIO)); }
+function loadPortfolioLS(){
+  try{ const s = localStorage.getItem(LS_KEY); if(s) PORTFOLIO = JSON.parse(s); }catch(e){}
+}
+function addToPortfolio(ticker){
+  ticker = ticker.toUpperCase();
+  if(!ETF_DATA[ticker]){ toast("Unknown ticker: "+ticker); return; }
+  if(PORTFOLIO.some(p=>p.ticker===ticker)){ toast(ticker+" already in portfolio"); return; }
+  const remaining = 100 - totalAlloc();
+  // give new holding a sensible default: fill remaining space, or 25% if already full (warning will guide the user)
+  const alloc = remaining > 0 ? Math.round(remaining) : 25;
+  PORTFOLIO.push({ticker, allocation: alloc, account: optimalAccount(ETF_DATA[ticker])});
+  savePortfolioLS(); renderPortfolio(); recalc();
+  toast("Added "+ticker + (remaining<=0 ? " (adjust allocations to total 100%)" : ""));
+}
+function removeFromPortfolio(index){
+  PORTFOLIO.splice(index,1);
+  savePortfolioLS(); renderPortfolio(); recalc();
+}
+
+function totalAlloc(){ return PORTFOLIO.reduce((s,p)=>s+(+p.allocation||0),0); }
+
+function renderPortfolio(){
+  const list = document.getElementById('pfList');
+  const empty = document.getElementById('pfEmpty');
+  const tot = totalAlloc();
+  const totEl = document.getElementById('totalAlloc');
+  totEl.textContent = tot+"%";
+  totEl.style.color = tot===100 ? "#1a9c5b" : (tot>100 ? "#D32F2F" : (tot>=90?"#b9760a":"#F5A623"));
+  const warn = document.getElementById('allocWarn');
+  if(tot>100){ warn.textContent="⚠ Total allocation exceeds 100% ("+tot+"%). Reduce some holdings."; warn.className="text-sm font-semibold mb-3 px-3 py-2 rounded-lg bg-redx/10 text-redx"; warn.classList.remove('hidden'); }
+  else if(tot<100){ warn.textContent="Total allocation is "+tot+"% (below 100%). Unallocated "+ (100-tot) +"% earns 0% here."; warn.className="text-sm font-semibold mb-3 px-3 py-2 rounded-lg bg-gold/15 text-[#b9760a]"; warn.classList.remove('hidden'); }
+  else { warn.classList.add('hidden'); }
+
+  if(!PORTFOLIO.length){ list.innerHTML=""; empty.classList.remove('hidden'); return; }
+  empty.classList.add('hidden');
+  list.innerHTML = PORTFOLIO.map((p,i)=>{
+    const etf = ETF_DATA[p.ticker];
+    const opt = optimalAccount(etf);
+    const acctOpts = ["TFSA","RRSP","NONREG"].map(a=>`<option value="${a}" ${a===p.account?'selected':''}>${a}</option>`).join('');
+    return `<div class="pf-row border rounded-xl p-3" data-i="${i}">
+      <div class="flex items-center gap-2 min-w-0">
+        <div class="font-extrabold text-navy dark:text-gold">${p.ticker}</div>
+        <div class="text-xs text-gray-500 truncate">${etf.name}</div>
+      </div>
+      <div class="text-xs text-gray-500">${etf.assetClass}</div>
+      <input type="number" min="0" max="100" value="${p.allocation}" class="border rounded-lg px-2 py-1 w-full text-center font-semibold alloc-input" data-i="${i}" aria-label="Allocation percent">
+      <select class="border rounded-lg px-1 py-1 text-xs font-semibold acct-select" data-i="${i}">${acctOpts}</select>
+      <button class="w-9 h-9 rounded-lg text-redx hover:bg-redx/10 flex items-center justify-center rm-btn" data-i="${i}" title="Remove"><i class="fa-solid fa-trash"></i></button>
+    </div>`;
+  }).join('');
+  list.querySelectorAll('.alloc-input').forEach(el=>el.addEventListener('input',e=>{
+    PORTFOLIO[+e.target.dataset.i].allocation = Math.max(0, Math.min(100, +e.target.value||0));
+    savePortfolioLS(); renderPortfolio(); recalc();
+  }));
+  list.querySelectorAll('.acct-select').forEach(el=>el.addEventListener('change',e=>{
+    PORTFOLIO[+e.target.dataset.i].account = e.target.value;
+    savePortfolioLS(); recalc();
+  }));
+  list.querySelectorAll('.rm-btn').forEach(el=>el.addEventListener('click',e=>removeFromPortfolio(+e.target.dataset.i)));
+}
+
+/* ============ CALCULATIONS ============ */
+function calcPortfolio(){
+  const amount = +document.getElementById('pbAmount').value;
+  const years = +document.getElementById('pbYears').value;
+  const monthly = +document.getElementById('pbMonthly').value;
+  const ret = +document.getElementById('pbReturn').value;
+
+  let optFv=0, nonFv=0, sumAlloc=0;
+  const holdings = PORTFOLIO.map(p=>{
+    const etf = ETF_DATA[p.ticker];
+    const alloc = (+p.allocation||0)/100;
+    sumAlloc += alloc;
+    const prin = amount*alloc;
+    const optDrag = taxDragPct(etf, p.account);
+    const nonDrag = taxDragPct(etf, "TFSA"); // worst-case base (all in TFSA)
+    const optRet = ret - etf.mer - optDrag*100;
+    const nonRet = ret - etf.mer - nonDrag*100;
+    const oS = project(prin, monthly*alloc, years, optRet);
+    const nS = project(prin, monthly*alloc, years, nonRet);
+    optFv += oS[oS.length-1];
+    nonFv += nS[nS.length-1];
+    return {ticker:p.ticker, etf, alloc, prin, account:p.account, optDrag, nonDrag, optRet, nonRet,
+            optSeries:oS, nonSeries:nS, optAnnDrag: prin*optDrag, nonAnnDrag: prin*nonDrag};
+  });
+  return {amount, years, monthly, ret, holdings, optFv, nonFv, sumAlloc};
+}
+
+function buildAllocationMix(holdings){
+  const mix = {equity:0,canada:0,us:0,intl:0,bond:0};
+  holdings.forEach(h=>{
+    const a = h.alloc;
+    ALLOC_KEYS.forEach(k=>{ mix[k] += a*(h.etf.alloc[k]||0); });
+  });
+  return mix;
+}
+
+function recalc(){
+  const res = calcPortfolio();
+  // metric cards
+  const savings = res.optFv - res.nonFv;
+  document.getElementById('mcOpt').textContent = fmt$(res.optFv);
+  document.getElementById('mcNon').textContent = fmt$(res.nonFv);
+  document.getElementById('mcSave').textContent = fmt$(savings);
+  const eff = res.holdings.length ? (res.ret - res.holdings.reduce((s,h)=>s+h.alloc*h.etf.mer + h.alloc*h.optDrag*100,0)) : 0;
+  document.getElementById('mcEff').textContent = eff.toFixed(2)+"%";
+
+  if(document.getElementById('tab-builder').classList.contains('hidden')) return; // lazy render charts only when visible
+
+  // charts
+  const labels = Array.from({length:res.years+1},(_,i)=>"Yr "+i);
+  const optTot = labels.map((_,y)=> res.holdings.reduce((s,h)=>s + (h.optSeries[y]||h.optSeries[h.optSeries.length-1]),0));
+  const nonTot = labels.map((_,y)=> res.holdings.reduce((s,h)=>s + (h.nonSeries[y]||h.nonSeries[h.nonSeries.length-1]),0));
+
+  drawLine('growthChart', labels, [
+    {label:"Optimized",data:optTot,borderColor:"#F5A623",backgroundColor:"rgba(245,166,35,.15)",fill:true,borderWidth:3},
+    {label:"Non-Optimized",data:nonTot,borderColor:"#D32F2F",borderDash:[6,4],fill:false,borderWidth:2}
+  ], "$");
+
+  const mix = buildAllocationMix(res.holdings);
+  drawDonut('donutChart', ["Equity","Canada","US","Intl","Bonds"],
+    [mix.equity,mix.canada,mix.us,mix.intl,mix.bond],
+    ["#1A2A44","#F5A623","#3b82f6","#10b981","#9ca3af"]);
+
+  drawBar('dragChart', res.holdings.map(h=>h.ticker),
+    res.holdings.map(h=>Math.round(h.optAnnDrag)), "#F5A623", "Annual drag $");
+
+  // account allocation: by dollar weight in each account
+  const acctSum = {TFSA:0,RRSP:0,NONREG:0};
+  res.holdings.forEach(h=>{ acctSum[h.account] += h.prin; });
+  drawBar('acctChart', ["TFSA","RRSP","Non-Reg"],
+    [acctSum.TFSA,acctSum.RRSP,acctSum.NONREG], "#1A2A44", "$ invested", true);
+
+  // holding stats + recommendations
+  renderHoldStats(res);
+  renderRecommendations(res);
+}
+
+function renderHoldStats(res){
+  const el = document.getElementById('holdStats');
+  const totDrag = res.holdings.reduce((s,h)=>s+h.optAnnDrag,0);
+  const avgScore = res.holdings.length ? Math.round(res.holdings.reduce((s,h)=>{ const opt=optimalAccount(h.etf); s += (h.account===opt?100:60); return s;},0)/res.holdings.length) : 0;
+  el.innerHTML = `
+    <div class="border rounded-xl p-4"><div class="text-sm text-gray-500">Holdings</div><div class="text-xl font-extrabold text-navy dark:text-gold">${res.holdings.length}</div></div>
+    <div class="border rounded-xl p-4"><div class="text-sm text-gray-500">Avg tax-efficiency</div><div class="text-xl font-extrabold text-navy dark:text-gold">${avgScore}%</div></div>
+    <div class="border rounded-xl p-4"><div class="text-sm text-gray-500">Annual tax drag (opt)</div><div class="text-xl font-extrabold text-navy dark:text-gold">${fmt$(totDrag)}</div></div>`;
+}
+
+function renderRecommendations(res){
+  const recs = [];
+  res.holdings.forEach(h=>{
+    const opt = optimalAccount(h.etf);
+    const cur = PORTFOLIO.find(p=>p.ticker===h.ticker).account;
+    if(cur!==opt){
+      const dragNow = taxDragPct(h.etf, cur);
+      const dragBest = taxDragPct(h.etf, opt);
+      const save = h.prin*(dragNow - dragBest);
+      if(save>0.5){
+        recs.push(`<div class="flex items-start gap-2 border rounded-xl p-3"><i class="fa-solid fa-arrow-right-arrow-left text-gold mt-1"></i><div><b>Move ${h.ticker}</b> from ${cur} → <b>${opt}</b> to save ~<b class="text-[#1a9c5b]">${fmt$(save)}/yr</b>. ${recExplanation(h.etf,opt)}</div></div>`);
+      }
+    }
+    // swap suggestion: US-listed in TFSA -> suggest RRSP proxy
+    if(h.etf.region==="US" && cur!=="RRSP"){
+      const save = h.prin*(taxDragPct(h.etf,"TFSA") - 0);
+      if(save>0.5) recs.push(`<div class="flex items-start gap-2 border rounded-xl p-3"><i class="fa-solid fa-repeat text-gold mt-1"></i><div><b>Swap</b> ${h.ticker} (held in ${cur}) for its CAD-listed equivalent (e.g. VFV) or move to <b>RRSP</b> to avoid 15% US withholding — save ~<b class="text-[#1a9c5b]">${fmt$(save)}/yr</b>.</div></div>`);
+    }
+  });
+  const el = document.getElementById('recList');
+  if(!res.holdings.length){ el.innerHTML = `<p class="text-sm text-gray-400">Add holdings to see tax-optimization suggestions.</p>`; return; }
+  if(!recs.length){ el.innerHTML = `<div class="flex items-center gap-2 border border-greenx/30 rounded-xl p-3" style="border-color:rgba(26,156,91,.3)"><i class="fa-solid fa-circle-check text-[#1a9c5b]"></i><div>Your portfolio is already in tax-optimal accounts. Nice work. 🎉</div></div>`; return; }
+  el.innerHTML = recs.join('');
+}
+
+/* ============ CHART HELPERS ============ */
+const isDark = ()=>document.body.classList.contains('dark');
+function drawLine(id, labels, datasets, fmt){
+  const c = builderCharts[id];
+  const data = {labels, datasets};
+  if(c){ c.data=data; c.update(); return; }
+  builderCharts[id] = new Chart(document.getElementById(id),{type:'line',data,
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'},tooltip:{callbacks:{label:cx=>cx.dataset.label+": "+fmt$(cx.parsed.y)}}},scales:{y:{ticks:{callback:v=>"$"+(v/1000).toFixed(0)+"k"}}}}});
+}
+function drawDonut(id, labels, data, colors){
+  const c = builderCharts[id];
+  const d = {labels, datasets:[{data, backgroundColor:colors, borderWidth:2, borderColor: isDark()?"#16213a":"#fff"}]};
+  if(c){ c.data=d; c.update(); return; }
+  builderCharts[id] = new Chart(document.getElementById(id),{type:'doughnut',data:d,
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right'},tooltip:{callbacks:{label:cx=>cx.label+": "+cx.parsed+"%"}}}}});
+}
+function drawBar(id, labels, data, color, axisLabel, isMoney){
+  const c = builderCharts[id];
+  const d = {labels, datasets:[{label:axisLabel,data,backgroundColor:color,borderRadius:6}]};
+  if(c){ c.data=d; c.update(); return; }
+  builderCharts[id] = new Chart(document.getElementById(id),{type:'bar',data:d,
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:cx=> isMoney? fmt$(cx.parsed.y) : cx.parsed.y}}},scales:{y:{ticks:{callback:v=> isMoney? "$"+(v/1000).toFixed(0)+"k" : v}}}}});
+}
+function ensureBuilderCharts(){ recalc(); }
+
+/* ============ SHARE / EXPORT ============ */
+function buildShareHash(){
+  const slim = PORTFOLIO.map(p=>({t:p.ticker,a:p.allocation,c:p.account}));
+  return "#pf=" + btoa(encodeURIComponent(JSON.stringify(slim)));
+}
+function applyShareHash(){
+  if(location.hash.startsWith("#pf=")){
+    try{
+      const slim = JSON.parse(decodeURIComponent(atob(location.hash.slice(4))));
+      PORTFOLIO = slim.filter(x=>ETF_DATA[x.t]).map(x=>({ticker:x.t,allocation:+x.a||0,account:x.c||optimalAccount(ETF_DATA[x.t])}));
+      savePortfolioLS();
+    }catch(e){}
+  }
+}
+
 /* ============ EVENTS ============ */
 document.getElementById('analyzeBtn').addEventListener('click',analyze);
 document.getElementById('analyzeBtn2').addEventListener('click',analyze);
-document.getElementById('ticker').addEventListener('keydown',e=>{if(e.key==='Enter')analyze();});
+document.getElementById('search').addEventListener('keydown',e=>{if(e.key==='Enter')analyze();});
+
 document.getElementById('amount').addEventListener('input',e=>document.getElementById('amtLbl').textContent=fmt$(+e.target.value));
 document.getElementById('years').addEventListener('input',e=>document.getElementById('yrLbl').textContent=e.target.value+"y");
 document.getElementById('monthly').addEventListener('input',e=>document.getElementById('moLbl').textContent=fmt$(+e.target.value));
+
+['pbAmount','pbYears','pbMonthly','pbReturn'].forEach(id=>{
+  const lblMap={pbAmount:'pbAmtLbl',pbYears:'pbYrLbl',pbMonthly:'pbMoLbl',pbReturn:'pbRetLbl'};
+  const fmtMap={pbAmount:fmt$,pbYears:v=>v+'y',pbMonthly:fmt$,pbReturn:v=>v+'%'};
+  document.getElementById(id).addEventListener('input',e=>{
+    document.getElementById(lblMap[id]).textContent = fmtMap[id](+e.target.value);
+    recalc();
+  });
+});
+
+document.getElementById('saveBtn').addEventListener('click',()=>{savePortfolioLS();toast("Portfolio saved");});
+document.getElementById('loadBtn').addEventListener('click',()=>{loadPortfolioLS();renderPortfolio();recalc();toast("Portfolio loaded");});
+document.getElementById('clearBtn').addEventListener('click',()=>{PORTFOLIO=[];savePortfolioLS();renderPortfolio();recalc();toast("Cleared");});
+document.getElementById('shareBtn').addEventListener('click',()=>{
+  const url = location.origin+location.pathname+buildShareHash();
+  location.hash = buildShareHash();
+  navigator.clipboard?.writeText(url).then(()=>toast("Share link copied to clipboard"),()=>toast("Link set in address bar"));
+});
+document.getElementById('exportBtn').addEventListener('click',()=>{
+  const url = location.origin+location.pathname+buildShareHash();
+  const w = window.open('','_blank');
+  w.document.write(`<title>Portfolio Report — NorthernNomad</title>
+    <style>body{font-family:Inter,Arial,sans-serif;padding:40px;color:#1A2A44;max-width:760px;margin:auto}
+    h1{color:#1A2A44}table{width:100%;border-collapse:collapse;margin:16px 0}td,th{border:1px solid #ddd;padding:8px;text-align:left}
+    .k{font-weight:800}</style>
+    <h1>🇨🇦 Portfolio Tax-Optimization Report</h1>
+    <p>Generated ${new Date().toLocaleString()}</p>
+    <div style="display:flex;gap:24px;flex-wrap:wrap;margin:16px 0">
+      <div><div class="k">Optimized Value</div><div style="font-size:22px">${document.getElementById('mcOpt').textContent}</div></div>
+      <div><div class="k">Non-Optimized Value</div><div style="font-size:22px">${document.getElementById('mcNon').textContent}</div></div>
+      <div><div class="k">Tax Savings</div><div style="font-size:22px;color:#1a9c5b">${document.getElementById('mcSave').textContent}</div></div>
+      <div><div class="k">Effective Return</div><div style="font-size:22px">${document.getElementById('mcEff').textContent}</div></div>
+    </div>
+    <table><tr><th>Ticker</th><th>Allocation</th><th>Account</th><th>Tax drag/yr</th></tr>
+    ${PORTFOLIO.map(p=>{const h=calcPortfolio().holdings.find(x=>x.ticker===p.ticker);return `<tr><td>${p.ticker}</td><td>${p.allocation}%</td><td>${p.account}</td><td>${fmt$(h?h.optAnnDrag:0)}</td></tr>`}).join('')}
+    </table>
+    <p style="font-size:12px;color:#888">Estimates only · not financial advice · ${url}</p>
+    <script>window.onload=()=>window.print()<\/script>`);
+});
+
+/* dark mode */
+function setDark(on){
+  document.body.classList.toggle('dark', on);
+  localStorage.setItem('nn_dark', on?'1':'0');
+  document.getElementById('darkToggle').innerHTML = on?'<i class="fa-solid fa-sun"></i>':'<i class="fa-solid fa-moon"></i>';
+}
+document.getElementById('darkToggle').addEventListener('click',()=>setDark(!document.body.classList.contains('dark')));
+
+/* init */
+applyShareHash();
+loadPortfolioLS();
+if(localStorage.getItem('nn_dark')==='1') setDark(true);
+renderPortfolio();
+recalc();
+
+/* wire up search boxes */
+makeSearch(document.getElementById('search'), document.getElementById('dd'), document.getElementById('searchSpin'));
+makeSearch(document.getElementById('pbSearch'), document.getElementById('pbDd'), document.getElementById('pbSpin'), (t)=>addToPortfolio(t));
 </script>
 </body>
 </html>
