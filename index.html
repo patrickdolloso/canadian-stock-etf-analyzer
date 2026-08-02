@@ -460,15 +460,19 @@ function highlight(text, q){
   return escapeHtml(text.slice(0,i))+"<mark>"+escapeHtml(text.slice(i,i+q.length))+"</mark>"+escapeHtml(text.slice(i+q.length));
 }
 
-/* ============ LIVE PRICE FETCH (Twelve Data) ============ */
+/* ============ LIVE PRICE FETCH ============ */
+/* Primary: Twelve Data (free read-only key, CORS-friendly, safe to ship).
+   Fallback: Apify "Twelve Data Public Scraper" actor via REST — needs NO TD key,
+   but exposes your Apify token in page source (any visitor can read it and spend
+   your Apify credits). Leave APIFY_TOKEN blank unless you accept that tradeoff,
+   or proxy it through your own server. */
 const TD_KEY = "YOUR_TWELVE_DATA_KEY"; // <-- insert free key from twelvedata.com for live prices
+const APIFY_TOKEN = "";                // <-- optional: Apify token for no-key live prices (see warning above)
+const APIFY_ACTOR = "parseforge~twelvedata-public-scraper";
 const priceCache = {}; // ticker -> {price, change, ts}
-async function fetchLivePrice(ticker){
-  const now = Date.now();
-  if(priceCache[ticker] && now - priceCache[ticker].ts < 5*60*1000) return priceCache[ticker];
-  if(TD_KEY === "YOUR_TWELVE_DATA_KEY"){
-    return null; // no key -> fallback to static
-  }
+
+async function fetchFromTwelveData(ticker){
+  if(TD_KEY === "YOUR_TWELVE_DATA_KEY") return null;
   try{
     const url = `https://api.twelvedata.com/quote?symbol=${encodeURIComponent(ticker)}&apikey=${TD_KEY}`;
     const res = await fetch(url);
@@ -477,12 +481,45 @@ async function fetchLivePrice(ticker){
       const price = parseFloat(j.close);
       const prev = parseFloat(j.previous_close);
       const change = prev ? (price-prev)/prev*100 : 0;
-      const data = {price, change, ts:now, cap:j.market_cap || null};
-      priceCache[ticker] = data;
-      return data;
+      return {price, change, ts:Date.now(), cap:j.market_cap || null};
     }
-  }catch(e){ /* network error -> fallback */ }
+  }catch(e){ /* network error -> try next source */ }
   return null;
+}
+
+async function fetchFromApify(ticker){
+  if(!APIFY_TOKEN) return null;
+  try{
+    // run-sync-get-dataset-items: runs the actor and returns the dataset rows directly
+    const url = `https://api.apify.com/v2/acts/${APIFY_ACTOR}/run-sync-get-dataset-items?token=${APIFY_TOKEN}`;
+    const res = await fetch(url, {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({ symbols:[ticker] })
+    });
+    if(!res.ok) return null;
+    const rows = await res.json();
+    const row = Array.isArray(rows) ? rows[0] : (rows && rows.items && rows.items[0]);
+    if(row && (row.close!=null || row.price!=null)){
+      const price = parseFloat(row.close ?? row.price);
+      const prev = parseFloat(row.previous_close ?? row.previousClose ?? price);
+      const change = prev ? (price-prev)/prev*100 : 0;
+      return {price, change, ts:Date.now(), cap:row.market_cap ?? null};
+    }
+  }catch(e){ /* network error -> static fallback */ }
+  return null;
+}
+
+async function fetchLivePrice(ticker){
+  const now = Date.now();
+  if(priceCache[ticker] && now - priceCache[ticker].ts < 5*60*1000) return priceCache[ticker];
+  let d = await fetchFromTwelveData(ticker);
+  if(!d) d = await fetchFromApify(ticker);
+  if(d){
+    priceCache[ticker] = d;
+    return d;
+  }
+  return null; // -> caller shows static expected-return fallback
 }
 
 /* ============ SEARCH DROPDOWN (reusable) ============ */
